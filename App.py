@@ -2,7 +2,7 @@ import streamlit as st
 import MetaTrader5 as mt5
 import pandas as pd
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # --- USER SETTINGS ---
 st.set_page_config(page_title="Fractal Shift Bot", layout="wide")
@@ -95,6 +95,36 @@ else:
 
     if mt5.initialize():
         st.info("Connection already active.")
-        # Add live trading logic here
+
+        st.subheader(f"📡 Live Positions for {def_symbol}")
+        positions = mt5.positions_get(symbol=def_symbol)
+
+        if positions:
+            pos_data = []
+            total_lots = 0.0
+            total_profit = 0.0
+
+            for pos in positions:
+                total_lots += pos.volume
+                total_profit += pos.profit
+                pos_data.append({
+                    "Ticket": pos.ticket,
+                    "Type": "Buy" if pos.type == 0 else "Sell",
+                    "Lots": pos.volume,
+                    "Entry Price": pos.price_open,
+                    "SL": pos.sl,
+                    "TP": pos.tp,
+                    "Profit": pos.profit
+                })
+
+            st.metric("🟡 Open Trades", len(positions))
+            st.metric("📊 Total Lots", total_lots)
+            st.metric("💰 Current P/L", f"${total_profit:.2f}")
+
+            st.dataframe(pd.DataFrame(pos_data))
+        else:
+            st.warning("No open positions on this symbol.")
+
+        # 🔁 You can now extend this area for auto-trading logic later
     else:
         st.warning("Please login to MT5 to enable live trading.")
