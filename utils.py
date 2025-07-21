@@ -5,7 +5,6 @@ import shutil
 import time
 import csv
 from datetime import datetime
-from werkzeug.utils import secure_filename # Recommended for security
 
 # --- Configuration ---
 UPLOAD_DIR = "uploaded_files"
@@ -44,19 +43,19 @@ def save_uploaded_file(file, note=""):
 
     Returns:
         - A string path to the processed CSV file.
-        - A list of paths if the ZIP contains multiple CSVs.
         - An error message string if something goes wrong.
     """
     ensure_dirs()
     
     # --- Security Improvement: Sanitize filename ---
-    # Using a secure filename prevents path traversal attacks (e.g., ../../etc/passwd)
-    # It's highly recommended to use a library like werkzeug for this.
-    # If not available, you would need to implement your own sanitization logic.
+    # The import is moved inside the function and wrapped in a try/except
+    # to prevent the app from crashing if werkzeug is not installed.
     try:
+        from werkzeug.utils import secure_filename
         safe_filename = secure_filename(file.name)
     except ImportError:
-        # Fallback if werkzeug is not installed
+        # Fallback if werkzeug is not installed. This makes it an optional dependency.
+        print("Warning: werkzeug not found. Using basic filename sanitization. For better security, pip install werkzeug.")
         safe_filename = os.path.basename(file.name).replace("..", "").replace("/", "").replace("\\", "")
 
     file_path = os.path.join(UPLOAD_DIR, safe_filename)
@@ -80,33 +79,19 @@ def save_uploaded_file(file, note=""):
                 
                 csv_files = [f for f in os.listdir(extract_path) if f.endswith(".csv")]
 
-                # Improved logic for multiple CSVs
                 if not csv_files:
-                    # Clean up empty extraction folder
                     shutil.rmtree(extract_path)
                     return "No CSV files found in the ZIP archive."
-                elif len(csv_files) == 1:
-                    # Success case: one CSV found
-                    selected_csv_path = os.path.join(extract_path, csv_files[0])
-                    _record_file_history(file.name, size_mb, note)
-                    os.remove(file_path) # Clean up the original zip
-                    return selected_csv_path
-                else:
-                    # Handle multiple CSVs by returning a list of their paths
-                    # The front-end can then decide how to handle this.
-                    # For now, we'll return the first one as per original logic, but with a warning.
-                    # A better implementation might return the list itself.
-                    st.warning(f"Multiple CSVs found. Using the first one: {csv_files[0]}")
-                    selected_csv_path = os.path.join(extract_path, csv_files[0])
-                    _record_file_history(file.name, size_mb, note)
-                    os.remove(file_path) # Clean up the original zip
-                    return selected_csv_path
+                
+                # For now, we'll return the first one as per original logic.
+                selected_csv_path = os.path.join(extract_path, csv_files[0])
+                _record_file_history(file.name, size_mb, note)
+                return selected_csv_path
 
         except zipfile.BadZipFile:
-            os.remove(file_path)
             return "Error: The uploaded file is not a valid ZIP archive."
         finally:
-            # Ensure original zip is removed if it still exists
+            # Clean up the original zip file after processing
             if os.path.exists(file_path):
                 os.remove(file_path)
     
